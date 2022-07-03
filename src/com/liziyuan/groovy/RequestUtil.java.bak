@@ -1,0 +1,132 @@
+package com.liziyuan.groovy.demo1;
+
+
+import org.apache.commons.io.IOUtils
+import com.alibaba.fastjson.JSONArray
+import com.alibaba.fastjson.JSONObject
+import com.glodon.nifi.script.client.HttpClient
+import java.text.SimpleDateFormat
+import java.nio.charset.StandardCharsets
+import org.apache.nifi.flowfile.attributes.CoreAttributes
+
+class RequestUtil {
+    static log = null
+    /**
+     * 缓存中项目ID的key
+     */
+    private static final PROJECT_IDS_KEY = "projectIds"
+    /**
+     * 缓存中项目ID的放入时间key
+     */
+    private static final PROJECT_IDS_SET_TIME_KEY = "setTime"
+    /**
+     * 基准地址
+     */
+    private static String HOST = "http://39.106.50.195:8100/"
+    private static String CUR_API_URL = "api/provide/service/third/pull/aIDeviceData?appid=%s&sign=%s"
+
+    /**
+     * 应用id和授权码
+     */
+    private static String APP_ID = "qdzhgdcs20210713"
+    private static String SIGN = "DB114DD5D540DBE11F576D58EA81A03A"
+
+    static String getCurrentUrl() {
+        return HOST + String.format(CUR_API_URL, APP_ID, SIGN)
+    }
+
+    static String getCurrentDeviceData(String url, Long projectId, Integer pageNo, Integer pageSize) {
+        Map<String, Object> body = new HashMap<>()
+        body.put("projectId", projectId)
+        int currentPage = (pageNo != null) ? pageNo : 1
+        body.put("pageNo", currentPage)
+        int currentSize = (pageSize != null) ? pageSize : 200
+        body.put("pageSize", currentSize)
+        String result = HttpClient.sendPostRequest(url, null, JSONObject.toJSONString(body))
+        return result
+    }
+
+    static JSONArray changeInnerResultToArray(Long projectId, String result, String successKey, Integer successValue, String outKey, String innerKey) {
+        if (result == null || "".equals(result.trim())) {
+            return null
+        }
+        JSONObject outJson = JSONObject.parseObject(result)
+        if (!outJson.containsKey(successKey) || outJson.getInteger(successKey) != successValue) {
+            log.warn("get inner data error, projectId: " + projectId + ",result: " + result)
+            return null
+        }
+        if (outJson == null || outJson.getJSONObject(outKey) == null) {
+            return null
+        }
+        JSONArray array = outJson.getJSONObject(outKey).getJSONArray(innerKey)
+        if (array == null || array.size() == 0) {
+            return null
+        }
+        return array
+    }
+
+    /**
+     * 获取项目列表
+     */
+    static List<Long> getProjectIds(String projectIdsCacheValue) {
+        if (projectIdsCacheValue == null || projectIdsCacheValue.trim().equals("")) {
+            log.error("fetch projectIds from cache null!")
+            return Collections.EMPTY_LIST
+        }
+        JSONObject projectIdObj = JSONObject.parseObject(projectIdsCacheValue)
+        String setTime = projectIdObj.getString(PROJECT_IDS_SET_TIME_KEY)
+        log.info("getProjectIds from cache, setTime: " + setTime)
+        String projectIdsStr = projectIdObj.getString(PROJECT_IDS_KEY)
+        String[] projectIds = projectIdsStr.split(",")
+        List<Long> projectIdList = new ArrayList<>()
+        for (String projectId : projectIds) {
+            projectIdList.add(Long.parseLong(projectId))
+        }
+        return projectIdList
+    }
+}
+
+RequestUtil.log = log
+        def oriFlowFile = session.get()
+        if (!oriFlowFile) return
+        String jsonStr = ""
+        try{
+        session.read(oriFlowFile, {inputStream ->
+        jsonStr = IOUtils.toString(inputStream, StandardCharsets.UTF_8)
+        } as InputStreamCallback)
+        } catch (e) {
+        log.error('read oriFlowFile error: {},{}', [jsonStr, e] as Object[])
+        session.remove(oriFlowFile)
+        return
+        }
+        session.remove(oriFlowFile)
+        List<Long> projectIds = RequestUtil.getProjectIds(jsonStr)
+        if (projectIds.size() == 0) {
+        return
+        }
+        for (Long projectId : projectIds) {
+        String url = RequestUtil.getCurrentUrl()
+        int page = 1
+        int pageSize = 200
+        while (pageSize >= 200) {
+        String result = RequestUtil.getCurrentDeviceData(url, projectId, page, pageSize)
+        JSONArray resultArray = RequestUtil.changeInnerResultToArray(projectId, result, "code", 0, "data", "list")
+        if (resultArray == null || resultArray.size() == 0) {
+        break
+        }
+        for (int i = 0; i < resultArray.size(); i++) {
+        JSONObject curObj = resultArray.getJSONObject(i)
+        SimpleDateFormat sf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+        curObj.put("gdc_update_time", sf.format(new Date()))
+        String resultStr = JSONObject.toJSONString(curObj)
+        def flowFile = session.create()
+        flowFile = session.write(flowFile, {outputStream ->
+        outputStream.write(resultStr.getBytes(StandardCharsets.UTF_8))} as OutputStreamCallback)
+        session.putAttribute(flowFile, CoreAttributes.MIME_TYPE.key(), "application/json")
+        session.transfer(flowFile, REL_SUCCESS)
+        }
+        page = page + 1
+        pageSize = resultArray.size()
+        session.commit()
+        }
+        }
