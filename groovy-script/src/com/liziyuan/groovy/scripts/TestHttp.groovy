@@ -1,8 +1,9 @@
-package com.liziyuan.groovy
+package com.liziyuan.groovy.scripts
 
 import com.alibaba.fastjson.JSONArray
-import com.liziyuan.groovy.demo1.bean.Product
-import com.liziyuan.groovy.demo1.bean.ProductFlow
+import com.liziyuan.groovy.bean.Product
+import com.liziyuan.groovy.bean.ProductFlow
+import com.liziyuan.groovy.utils.HttpClient
 
 class TestHttp {
     /**

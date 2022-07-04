@@ -2,7 +2,7 @@ package com.liziyuan.groovy.bean;
 
 /**
  * @author zqz
- * @date 2022-03 21:17
+ * @date 2022-06 21:17
  */
 public class ProductFlow {
     Long productId;

@@ -2,7 +2,7 @@ package com.liziyuan.groovy.bean;
 
 /**
  * @author zqz
- * @date 2022-03 21:15
+ * @date 2022-06 21:15
  */
 public class Product {
     Integer id;
