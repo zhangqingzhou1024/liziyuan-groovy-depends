@@ -93,7 +93,7 @@
             </plugin>-->
 
             <!--2、胖包 把依赖的jar和项目模块代码都打到一个包里-->
-            <!--<plugin>
+            <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <configuration>
                     <descriptorRefs>
@@ -101,7 +101,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            &lt;!&ndash;这里改成自己的启动位置（主类位置）&ndash;&gt;
+                            <!--这里改成自己的启动位置（主类位置）-->
                             <mainClass>xxx.xxxx.xxxx</mainClass>
                         </manifest>
                     </archive>
@@ -115,7 +115,7 @@
                         </goals>
                     </execution>
                 </executions>
-            </plugin>-->
+            </plugin>
         </plugins>
 
     </build>
